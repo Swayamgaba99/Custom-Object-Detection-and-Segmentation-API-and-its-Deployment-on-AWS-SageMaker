@@ -8,6 +8,11 @@ import cv2
 from dataclasses import dataclass
 import json
 import matplotlib.pyplot as plt
+from flask import Flask, request, jsonify
+import base64
+
+app = Flask(__name__)
+
 class BoundingBox:
     def __init__(self, xmin, ymin, xmax, ymax): 
         self.xmin = xmin
@@ -132,32 +137,58 @@ def get_boxes(results: DetectionResult) -> List[List[float]]:
         boxes.append(xyxy)
     return [boxes]
 
-image_url = "https://ayatrio-bucket.s3.ap-south-1.amazonaws.com/Wallpaper/Bedroom/1+-+230-100.jpg"
+def numpy_to_base64(image_array):
 
-labels = ["wall."]  
-threshold = 0.3
+    # Convert the image array to a BGR format (if necessary)
+    if image_array.shape[-1] == 3:
+        image_array = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
 
-detector_id = "IDEA-Research/grounding-dino-tiny"
-segmenter_id = "facebook/sam-vit-base"
+    _, encoded_image = cv2.imencode('.jpg', image_array)
 
-image_array, detections = grounded_segmentation(image=image_url, labels=labels, threshold=threshold, polygon_refinement=True, detector_id=detector_id, segmenter_id=segmenter_id)
+    # Convert the encoded image to Base64
+    base64_string = base64.b64encode(encoded_image).decode('utf-8')
 
-img=cv2.cvtColor(image_array,cv2.COLOR_BGR2RGB)
-for detection in detections: 
-  m=detection.mask
-  url=f"https://newbackend.ayatrio.com/api/fetchProductsByCategory/Wallpaper"
-  response = requests.get(url)
-  response.raise_for_status() 
-  data=json.loads(response.text)
-  product_image_url=data[0]['productImages'][0]['images'][0]
-  product_response = requests.get(product_image_url, stream=True)
-  product_response.raise_for_status()
-  new_image = np.frombuffer(product_response.content, np.uint8)
-  new_image=cv2.cvtColor(new_image,cv2.COLOR_BGR2RGB)
-  x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
-  resized_new_image=cv2.resize(new_image,(w,h))
-  img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
+    return base64_string
 
-plt.imshow(img)
-plt.axis('on')
-plt.show()
+@app.route('/process_images', methods=['POST'])
+def process_images():
+    json_data=request.get_json()
+    if json_data is None:
+      return jsonify({'error': 'No JSON data provided'}), 400
+    categoryname = json_data.get('categoryname')
+    categoryname=categoryname.capitalize()
+    image_urls = []
+    for image in json_data.get('images', []):
+      image_url = image.get('url')
+      if image_url:
+          image_urls.append(image_url)
+
+    labels = [f"{categoryname}."]  
+    threshold = 0.3
+
+    detector_id = "IDEA-Research/grounding-dino-tiny"
+    segmenter_id = "facebook/sam-vit-base"
+
+    image_array, detections = grounded_segmentation(image=image_url[0], labels=labels, threshold=threshold, polygon_refinement=True, detector_id=detector_id, segmenter_id=segmenter_id)
+
+    img=cv2.cvtColor(image_array,cv2.COLOR_BGR2RGB)
+
+    for detection in detections: 
+        m=detection.mask
+        url=f"https://newbackend.ayatrio.com/api/fetchProductsByCategory/{categoryname}"
+        response = requests.get(url)
+        response.raise_for_status() 
+        data=json.loads(response.text)
+        product_image_url=data[0]['productImages'][0]['images'][0]
+        product_response = requests.get(product_image_url, stream=True)
+        product_response.raise_for_status()
+        new_image = np.frombuffer(product_response.content, np.uint8)
+        new_image=cv2.cvtColor(new_image,cv2.COLOR_BGR2RGB)
+        x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
+        resized_new_image=cv2.resize(new_image,(w,h))
+        img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
+    base64_encoded_image1=numpy_to_base64(img)
+    return jsonify({'processed_image1': base64_encoded_image1})
+    
+if __name__ == '__main__':
+  app.run(debug=True, port=5000)
