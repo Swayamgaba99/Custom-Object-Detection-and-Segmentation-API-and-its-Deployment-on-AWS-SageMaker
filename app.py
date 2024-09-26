@@ -188,8 +188,9 @@ def process_images():
                 product_image_url=data[0]['productImages'][0]['images'][0]
                 product_response = requests.get(product_image_url, stream=True)
                 product_response.raise_for_status()
-                new_image = np.frombuffer(product_response.content, np.uint8)
-                new_image=cv2.cvtColor(new_image,cv2.COLOR_BGR2RGB)
+                product_image = np.asarray(bytearray(product_response.content), dtype="uint8")
+                product_image = cv2.imdecode(product_image, cv2.IMREAD_COLOR)
+                new_image=cv2.cvtColor(product_image,cv2.COLOR_BGR2RGB)
                 x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
                 resized_new_image=cv2.resize(new_image,(w,h))
                 img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
