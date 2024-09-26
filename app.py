@@ -155,8 +155,12 @@ def process_images():
     json_data=request.get_json()
     if json_data is None:
       return jsonify({'error': 'No JSON data provided'}), 400
+    
     categoryname = json_data.get('categoryname')
+    if categoryname is None:
+        return jsonify({'error': 'Category name is not provided'}), 400
     categoryname=categoryname.capitalize()
+
     image_urls = []
     for image in json_data.get('images', []):
       image_url = image.get('url')
@@ -168,25 +172,27 @@ def process_images():
 
     detector_id = "IDEA-Research/grounding-dino-tiny"
     segmenter_id = "facebook/sam-vit-base"
+    image_array, detections = grounded_segmentation(image=image_urls[0], labels=labels, threshold=threshold, polygon_refinement=True, detector_id=detector_id, segmenter_id=segmenter_id)
 
-    image_array, detections = grounded_segmentation(image=image_url[0], labels=labels, threshold=threshold, polygon_refinement=True, detector_id=detector_id, segmenter_id=segmenter_id)
-
-    img=cv2.cvtColor(image_array,cv2.COLOR_BGR2RGB)
+    img=image_array
 
     for detection in detections: 
         m=detection.mask
-        url=f"https://newbackend.ayatrio.com/api/fetchProductsByCategory/{categoryname}"
-        response = requests.get(url)
-        response.raise_for_status() 
-        data=json.loads(response.text)
-        product_image_url=data[0]['productImages'][0]['images'][0]
-        product_response = requests.get(product_image_url, stream=True)
-        product_response.raise_for_status()
-        new_image = np.frombuffer(product_response.content, np.uint8)
-        new_image=cv2.cvtColor(new_image,cv2.COLOR_BGR2RGB)
-        x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
-        resized_new_image=cv2.resize(new_image,(w,h))
-        img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
+        try:
+            url=f"https://newbackend.ayatrio.com/api/fetchProductsByCategory/{categoryname}"
+            response = requests.get(url)
+            response.raise_for_status() 
+            data=json.loads(response.text)
+            product_image_url=data[0]['productImages'][0]['images'][0]
+            product_response = requests.get(product_image_url, stream=True)
+            product_response.raise_for_status()
+            new_image = np.frombuffer(product_response.content, np.uint8)
+            new_image=cv2.cvtColor(new_image,cv2.COLOR_BGR2RGB)
+            x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
+            resized_new_image=cv2.resize(new_image,(w,h))
+            img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
+        except Exception as e:
+            print(e)
     base64_encoded_image1=numpy_to_base64(img)
     return jsonify({'processed_image1': base64_encoded_image1})
     
