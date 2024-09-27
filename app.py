@@ -167,8 +167,14 @@ def process_images():
       if image_url:
           image_urls.append(image_url)
 
-    labels = [f"{categoryname}."]  
-    threshold = 0.3
+     
+    if categoryname=="Wallpaper":
+        labels=["Wall."]
+    elif categoryname=="Flooring":
+        labels=["Floor."]
+    else:
+        labels = [f"{categoryname}."]
+    threshold = 0.4
 
     detector_id = "IDEA-Research/grounding-dino-tiny"
     segmenter_id = "facebook/sam-vit-base"
