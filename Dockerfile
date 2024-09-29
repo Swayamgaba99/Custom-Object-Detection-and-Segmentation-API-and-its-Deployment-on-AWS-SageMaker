@@ -1,15 +1,13 @@
-FROM python:3.9-slim-buster
+FROM python:3.11-slim-buster
 
-RUN pip install -r requirements.txt
-
-# Copy your application code
 COPY . /app
 
-# Set the working directory
 WORKDIR /app
 
 # Install nginx and gunicorn (web server and WSGI server)
-RUN apt-get update && apt-get install -y nginx gunicorn
+RUN apt-get update && apt-get install -y nginx gunicorn git
+
+RUN pip install -r requirements.txt
 
 # Expose the port for Flask app
 EXPOSE 5000
