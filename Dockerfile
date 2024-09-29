@@ -1,6 +1,6 @@
 FROM python:3.9-slim-buster
 
-RUN pip install -r requirements.txt  
+RUN pip install -r requirements.txt
 
 # Copy your application code
 COPY . /app
