@@ -1,13 +1,11 @@
 FROM python:3.11-slim-buster
 
 COPY . /app
-
 WORKDIR /app
-RUN python --version
-# Install nginx and gunicorn (web server and WSGI server)
-RUN apt-get update && apt-get install -y nginx git
-RUN pip install gunicorn
+
+# Install necessary dependencies
 RUN apt-get update && apt-get install -y \
+    git \
     libgl1-mesa-glx \
     libglib2.0-0 \
     ffmpeg \
@@ -15,10 +13,12 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install python dependencies
+RUN pip install gunicorn
 RUN pip install -r requirements.txt
 
-# Expose the port for Flask app
-EXPOSE 5000
+# Expose port 8080 for SageMaker
+EXPOSE 8080
 
 # Define the Gunicorn command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "600", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "1800", "app:app"]
