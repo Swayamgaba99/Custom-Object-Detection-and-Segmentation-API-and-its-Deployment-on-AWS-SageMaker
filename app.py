@@ -207,4 +207,4 @@ def process_images():
     return jsonify({'processed_image1': processed_image[0], 'processed_image2':processed_image[1]})
     
 if __name__ == '__main__':
-  app.run(debug=True, port=5000)
+  app.run(debug=True, port=8080)
