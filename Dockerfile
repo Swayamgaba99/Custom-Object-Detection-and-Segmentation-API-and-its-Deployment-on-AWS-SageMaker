@@ -22,5 +22,3 @@ EXPOSE 8080
 
 # Define the Gunicorn command to run the application
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "1800", "app:app"]
-
-ENTRYPOINT ["python", "app.py"]
