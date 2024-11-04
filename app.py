@@ -149,62 +149,86 @@ def numpy_to_base64(image_array):
     base64_string = base64.b64encode(encoded_image).decode('utf-8')
 
     return base64_string
-
-@app.route('/process_images', methods=['POST'])
-def process_images():
-    json_data=request.get_json()
+def process_images_handler():
+    json_data = request.get_json()
     if json_data is None:
-      return jsonify({'error': 'No JSON data provided'}), 400
-    
+        return jsonify({'error': 'No JSON data provided'}), 400
+
     categoryname = json_data.get('categoryname')
     if categoryname is None:
         return jsonify({'error': 'Category name is not provided'}), 400
-    categoryname=categoryname.capitalize()
+    categoryname = categoryname.capitalize()
 
-    image_urls = []
-    for image in json_data.get('images', []):
-      image_url = image.get('url')
-      if image_url:
-          image_urls.append(image_url)
-
-     
-    if categoryname=="Wallpaper":
-        labels=["Wall."]
-    elif categoryname=="Flooring":
-        labels=["Floor."]
+    image_urls = [image.get('url') for image in json_data.get('images', []) if image.get('url')]
+    
+    # Determine labels based on the category name
+    if categoryname == "Wallpaper":
+        labels = ["Wall."]
+    elif categoryname == "Flooring":
+        labels = ["Floor."]
     else:
         labels = [f"{categoryname}."]
-    threshold = 0.4
 
+    threshold = 0.4
     detector_id = "IDEA-Research/grounding-dino-tiny"
     segmenter_id = "facebook/sam-vit-base"
-    processed_image=[]
+    processed_images = []
+
     for i in image_urls:
-        image_array, detections = grounded_segmentation(image=i, labels=labels, threshold=threshold, polygon_refinement=True, detector_id=detector_id, segmenter_id=segmenter_id)
+        try:
+            # Perform grounded segmentation
+            image_array, detections = grounded_segmentation(
+                image=i, labels=labels, threshold=threshold, polygon_refinement=True,
+                detector_id=detector_id, segmenter_id=segmenter_id
+            )
 
-        img=image_array
+            img = image_array
 
-        for detection in detections: 
-            m=detection.mask
-            try:
-                url=f"https://newbackend.ayatrio.com/api/fetchProductsByCategory/{categoryname}"
-                response = requests.get(url)
-                response.raise_for_status() 
-                data=json.loads(response.text)
-                product_image_url=data[0]['productImages'][0]['images'][0]
-                product_response = requests.get(product_image_url, stream=True)
-                product_response.raise_for_status()
-                product_image = np.asarray(bytearray(product_response.content), dtype="uint8")
-                product_image = cv2.imdecode(product_image, cv2.IMREAD_COLOR)
-                new_image=cv2.cvtColor(product_image,cv2.COLOR_BGR2RGB)
-                x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
-                resized_new_image=cv2.resize(new_image,(w,h))
-                img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
-            except Exception as e:
-                print(e)
-            base64_encoded_image1=numpy_to_base64(img)
-            processed_image.append(base64_encoded_image1)
-    return jsonify({'processed_image1': processed_image[0], 'processed_image2':processed_image[1]})
+            # Process each detection
+            for detection in detections:
+                m = detection.mask
+                try:
+                    # Fetch the product image from external API
+                    url = f"https://newbackend.ayatrio.com/api/fetchProductsByCategory/{categoryname}"
+                    response = requests.get(url)
+                    response.raise_for_status()
+                    data = json.loads(response.text)
+                    product_image_url = data[0]['productImages'][0]['images'][0]
+
+                    product_response = requests.get(product_image_url, stream=True)
+                    product_response.raise_for_status()
+                    product_image = np.asarray(bytearray(product_response.content), dtype="uint8")
+                    product_image = cv2.imdecode(product_image, cv2.IMREAD_COLOR)
+                    new_image = cv2.cvtColor(product_image, cv2.COLOR_BGR2RGB)
+
+                    # Resize and overlay the product image
+                    x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
+                    resized_new_image = cv2.resize(new_image, (w, h))
+                    img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
+
+                except Exception as e:
+                    print(f"Error fetching or overlaying product image: {e}")
+
+            # Encode final processed image in base64 and add to the result list
+            base64_encoded_image = numpy_to_base64(img)
+            processed_images.append(base64_encoded_image)
+
+        except Exception as e:
+            print(f"Error processing image at URL {i}: {e}")
+
+    # Return all processed images in the response
+    return jsonify({'processed_images': processed_images})
+
+@app.route('/ping', methods=['GET'])
+def ping():
+        # Return a 200 status code for a healthy container
+    return 'Healthy', 200
+    
+@app.route('/invocations', methods=['POST'])
+def invocations():
+    # Call the handler function to process images
+    return process_images_handler()
+
     
 if __name__ == '__main__':
   app.run(debug=True, port=8080)
