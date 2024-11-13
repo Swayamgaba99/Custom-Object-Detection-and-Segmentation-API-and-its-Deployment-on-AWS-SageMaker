@@ -200,7 +200,7 @@ def process_images_handler():
     # Determine labels based on the category name
     if categoryname == "Wallpaper":
         labels = ["Wall."]
-    elif categoryname == "Flooring":
+    elif categoryname == "Flooring" or categoryname == "Rugs & Carpet" or categoryname == "Artificial Grass":
         labels = ["Floor."]
     else:
         labels = [f"{categoryname}."]
