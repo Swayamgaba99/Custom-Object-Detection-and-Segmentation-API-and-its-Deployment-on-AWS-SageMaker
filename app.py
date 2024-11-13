@@ -236,15 +236,11 @@ def process_images_handler():
                     product_image = np.asarray(bytearray(product_response.content), dtype="uint8")
                     product_image = cv2.imdecode(product_image, cv2.IMREAD_COLOR)
                     new_image = cv2.cvtColor(product_image, cv2.COLOR_BGR2RGB)
-                    print(1)
-                    if categoryname == "Flooring":
-                        print(2)
+                    if categoryname == "Flooring" or categoryname == "Artificial Grass" or categoryname=="Rugs & Carpet":
                         new_image = cv2.rotate(new_image, cv2.ROTATE_90_CLOCKWISE)
-                        print(3)
                     
                     x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
                     resized_new_image=tile_image(new_image,h,w)
-                    print(type(resized_new_image))
                     img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
 
                 except Exception as e:
