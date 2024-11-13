@@ -201,7 +201,6 @@ def process_images_handler():
     if categoryname == "Wallpaper":
         labels = ["Wall."]
     elif categoryname == "Flooring" or categoryname == "Rugs & Carpet" or categoryname == "Artificial Grass":
-        print(12)
         labels = ["Floor."]
     else:
         labels = [f"{categoryname}."]
@@ -230,18 +229,13 @@ def process_images_handler():
                     response = requests.get(url)
                     response.raise_for_status()
                     data = json.loads(response.text)
-                    print(0)
                     product_image_url = data[0]['productImages'][0]['images'][0]
-                    print(1)
                     product_response = requests.get(product_image_url, stream=True)
                     product_response.raise_for_status()
-                    print(2)
                     product_image = np.asarray(bytearray(product_response.content), dtype="uint8")
                     product_image = cv2.imdecode(product_image, cv2.IMREAD_COLOR)
-                    print(3)
                     new_image = cv2.cvtColor(product_image, cv2.COLOR_BGR2RGB)
                     if categoryname == "Flooring" or categoryname == "Artificial Grass" or categoryname=="Rugs & Carpet":
-                        print(4)
                         new_image = cv2.rotate(new_image, cv2.ROTATE_90_CLOCKWISE)
                     
                     x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
