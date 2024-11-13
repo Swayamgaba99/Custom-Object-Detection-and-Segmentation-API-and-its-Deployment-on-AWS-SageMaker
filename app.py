@@ -10,6 +10,7 @@ import json
 import matplotlib.pyplot as plt
 from flask import Flask, request, jsonify
 import base64
+import math
 
 app = Flask(__name__)
 
@@ -149,6 +150,41 @@ def numpy_to_base64(image_array):
     base64_string = base64.b64encode(encoded_image).decode('utf-8')
 
     return base64_string
+
+def tile_image(img, target_h, target_w):
+    try:
+        # Get the original image dimensions
+        h, w = img.shape[:2]
+
+        # Case 1: Both dimensions of target size are smaller or equal to the original image
+        if target_h <= h and target_w <= w:
+            return cv2.resize(img,(target_w,target_h))
+
+        # Case 2: Target height is smaller or equal, but width is larger (tile horizontally)
+        elif target_h <= h and target_w > w:
+            crop_img = cv2.resize(img,(w,target_h))
+            w_tiles = math.ceil(target_w / w)
+            tiled_img = np.hstack([crop_img] * w_tiles)
+            return tiled_img[:target_h, :target_w]
+
+        # Case 3: Target width is smaller or equal, but height is larger (tile vertically)
+        elif target_h > h and target_w <= w:
+            crop_img = cv2.resize(img,(target_w,h))
+            h_tiles = math.ceil(target_h / h)
+            tiled_img = np.vstack([crop_img] * h_tiles)
+            return tiled_img[:target_h, :target_w]
+
+        # Case 4: Both target height and width are larger than the original image (tile both ways)
+        else:
+            h_tiles = math.ceil(target_h / h)
+            w_tiles = math.ceil(target_w / w)
+            tiled_img = np.vstack([np.hstack([img] * w_tiles) for _ in range(h_tiles)])
+            return tiled_img[:target_h, :target_w]
+
+    except Exception as e:
+        print(f"Error in tiling the image: {e}")
+        return None
+    
 def process_images_handler():
     json_data = request.get_json()
     if json_data is None:
@@ -200,10 +236,15 @@ def process_images_handler():
                     product_image = np.asarray(bytearray(product_response.content), dtype="uint8")
                     product_image = cv2.imdecode(product_image, cv2.IMREAD_COLOR)
                     new_image = cv2.cvtColor(product_image, cv2.COLOR_BGR2RGB)
-
-                    # Resize and overlay the product image
+                    print(1)
+                    if categoryname == "Flooring":
+                        print(2)
+                        new_image = cv2.rotate(new_image, cv2.ROTATE_90_CLOCKWISE)
+                        print(3)
+                    
                     x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
-                    resized_new_image = cv2.resize(new_image, (w, h))
+                    resized_new_image=tile_image(new_image,h,w)
+                    print(type(resized_new_image))
                     img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
 
                 except Exception as e:
@@ -226,7 +267,6 @@ def ping():
     
 @app.route('/invocations', methods=['POST'])
 def invocations():
-    # Call the handler function to process images
     return process_images_handler()
 
     
