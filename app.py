@@ -43,6 +43,7 @@ class DetectionResult:
                                    ymin=detection_dict['box']['ymin'],
                                    xmax=detection_dict['box']['xmax'],
                                    ymax=detection_dict['box']['ymax']))
+    
 def load_image(image_str: str) -> Image.Image:
     if image_str.startswith("http"):
         image = Image.open(requests.get(image_str, stream=True).raw).convert("RGB")
@@ -156,34 +157,27 @@ def tile_image(img, target_h, target_w):
         # Get the original image dimensions
         h, w = img.shape[:2]
 
-        # Case 1: Both dimensions of target size are smaller or equal to the original image
-        if target_h <= h and target_w <= w:
-            return cv2.resize(img,(target_w,target_h))
+        # Calculate scaling factors to fit the image within the target dimensions
+        scale_factor = min(target_w / w, target_h / h)
+        scaled_w, scaled_h = int(w * scale_factor), int(h * scale_factor)
 
-        # Case 2: Target height is smaller or equal, but width is larger (tile horizontally)
-        elif target_h <= h and target_w > w:
-            crop_img = cv2.resize(img,(w,target_h))
-            w_tiles = math.ceil(target_w / w)
-            tiled_img = np.hstack([crop_img] * w_tiles)
-            return tiled_img[:target_h, :target_w]
+        # Resize the image
+        resized_img = cv2.resize(img, (scaled_w, scaled_h), interpolation=cv2.INTER_CUBIC)
 
-        # Case 3: Target width is smaller or equal, but height is larger (tile vertically)
-        elif target_h > h and target_w <= w:
-            crop_img = cv2.resize(img,(target_w,h))
-            h_tiles = math.ceil(target_h / h)
-            tiled_img = np.vstack([crop_img] * h_tiles)
-            return tiled_img[:target_h, :target_w]
+        # Tile the resized image to cover the target dimensions
+        h_tiles = math.ceil(target_h / scaled_h)
+        w_tiles = math.ceil(target_w / scaled_w)
+        tiled_img = np.tile(resized_img, (h_tiles, w_tiles, 1) if img.ndim == 3 else (h_tiles, w_tiles))
 
-        # Case 4: Both target height and width are larger than the original image (tile both ways)
-        else:
-            h_tiles = math.ceil(target_h / h)
-            w_tiles = math.ceil(target_w / w)
-            tiled_img = np.vstack([np.hstack([img] * w_tiles) for _ in range(h_tiles)])
-            return tiled_img[:target_h, :target_w]
+        # Crop the tiled image to the target size
+        output_img = tiled_img[:target_h, :target_w]
+
+        return output_img
 
     except Exception as e:
-        print(f"Error in tiling the image: {e}")
+        print(f"Error in scaling and tiling the image: {e}")
         return None
+
     
 def process_images_handler():
     json_data = request.get_json()
@@ -202,6 +196,8 @@ def process_images_handler():
         labels = ["Wall."]
     elif categoryname == "Flooring" or categoryname == "Rugs & Carpet" or categoryname == "Artificial Grass":
         labels = ["Floor."]
+    elif categoryname =="Window Blinds":
+        labels = ["Window Blinds."]
     else:
         labels = [f"{categoryname}."]
 
@@ -237,7 +233,7 @@ def process_images_handler():
                     new_image = cv2.cvtColor(product_image, cv2.COLOR_BGR2RGB)
                     if categoryname == "Flooring" or categoryname == "Artificial Grass" or categoryname=="Rugs & Carpet":
                         new_image = cv2.rotate(new_image, cv2.ROTATE_90_CLOCKWISE)
-                    
+
                     x, y, w, h = cv2.boundingRect(m.astype(np.uint8))
                     resized_new_image=tile_image(new_image,h,w)
                     img[y:y+h, x:x+w] = np.where(m[y:y+h, x:x+w, np.newaxis], resized_new_image, img[y:y+h, x:x+w])
